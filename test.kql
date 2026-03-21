@@ -1,1 +1,11 @@
-Test | where id = "aaabbbccc"
+let Clicks = UrlClickEvents
+    | where Workload == "Email"
+    | where Url contains "sharepoint.com"
+    | where Timestamp >= ago(1d)
+    | project ClickTime = Timestamp, AccountUpn, Url, UrlChain, ClickIP = IPAddress;
+let SignIns = SigninLogs
+    | where TimeGenerated >= ago(1d)
+    | project SignInTime = TimeGenerated, UserPrincipalName, SignInIP = IPAddress;
+Clicks
+| join kind=inner SignIns on $left.AccountUpn == $right.UserPrincipalName
+| where ClickIP != SignInIP
