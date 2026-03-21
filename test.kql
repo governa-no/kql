@@ -5,7 +5,7 @@ let Clicks = UrlClickEvents
     | project ClickTime = Timestamp, AccountUpn, Url, UrlChain, ClickIP = IPAddress;
 let SignIns = SigninLogs
     | where TimeGenerated >= ago(1d)
-    | project SignInTime = TimeGenerated, UserPrincipalName, SignInIP = IPAddress;
+    | project SignInTime = TimeGenerated, UserPrincipalName, SignInIP = IPAddress, Timestamp = TimeGenerated, ReportId = Id;
 Clicks
 | join kind=inner SignIns on $left.AccountUpn == $right.UserPrincipalName
 | where ClickIP != SignInIP
