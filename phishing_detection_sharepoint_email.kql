@@ -1,57 +1,40 @@
 let WhitelistIP = dynamic(["0.0.0.0"]);
 let LookBack = 1h;
-
-let Clicks = UrlClickEvents
-    | where TimeGenerated >= ago(LookBack)
+let Clicks =
+    UrlClickEvents
+    | where Timestamp >= ago(LookBack)
     | where Workload == "Email"
     | where Url has "sharepoint.com"
     | project
-        ClickTime = TimeGenerated,
+        Timestamp,
+        ReportId,
         AccountUpn,
+        ClickTime = Timestamp,
         Url,
         UrlChain,
         ClickIP = IPAddress;
 let SignIns =
-    union isfuzzy=true
-        (
-        SigninLogs
-        | where TimeGenerated >= ago(LookBack)
-        | project
-            SignInTime = TimeGenerated,
-            UserPrincipalName,
-            SignInIP = tostring(IPAddress),
-            Timestamp = TimeGenerated,
-            ReportId = tostring(Id),
-            ResourceDisplayName,
-            IncomingTokenType,
-            IsInteractive,
-            SignInSource = "SigninLogs"
-        ),
-        (
-        AADNonInteractiveUserSignInLogs
-        | where TimeGenerated >= ago(LookBack)
-        | project
-            SignInTime = TimeGenerated,
-            UserPrincipalName,
-            SignInIP = tostring(IPAddress),
-            Timestamp = TimeGenerated,
-            ReportId = tostring(Id),
-            ResourceDisplayName,
-            IncomingTokenType,
-            IsInteractive,
-            SignInEventTypes,
-            SignInSource = "AADNonInteractiveUserSignInLogs"
-        )
-    | where isnotempty(SignInIP)
-    | where not(set_has_element(WhitelistIP, SignInIP));
-
+    EntraIdSignInEvents
+    | where Timestamp >= ago(LookBack)
+    | where isnotempty(IPAddress)
+    | where not(set_has_element(WhitelistIP, IPAddress))
+    | project
+        SignInTime = Timestamp,
+        UserPrincipalName = AccountUpn,
+        SignInIP = IPAddress,
+        SignInReportId = ReportId,
+        ResourceDisplayName,
+        LogonType,
+        ClientAppUsed,
+        Browser,
+        ConditionalAccessStatus;
 Clicks
 | join kind=inner SignIns on $left.AccountUpn == $right.UserPrincipalName
 | where isnotempty(ClickIP) and isnotempty(SignInIP)
 | where SignInTime > ClickTime
 | where ClickIP != SignInIP
 | extend DelayMinutes = datetime_diff("minute", SignInTime, ClickTime)
-| summarize arg_min(DelayMinutes, *) by AccountUpn, ClickTime, Url, ClickIP
+| summarize arg_min(DelayMinutes, *) by Timestamp, ReportId
 | project
     Timestamp,
     ReportId,
@@ -61,10 +44,11 @@ Clicks
     DelayMinutes,
     ClickIP,
     SignInIP,
-    SignInSource,
-    IsInteractive,
-    IncomingTokenType,
-    SignInEventTypes,
+    SignInReportId,
     ResourceDisplayName,
+    LogonType,
+    ClientAppUsed,
+    Browser,
+    ConditionalAccessStatus,
     Url,
     UrlChain
