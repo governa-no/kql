@@ -1,0 +1,6 @@
+EmailEvents
+| where TimeGenerated > ago(60d)
+| where EmailDirection == "Outbound"
+| summarize EmailCount = count() by SenderFromAddress, Hour = bin(TimeGenerated, 1h)
+| summarize TopHourlyCount = max(EmailCount) by SenderFromAddress
+| sort by TopHourlyCount desc
