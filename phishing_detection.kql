@@ -1,11 +1,70 @@
+let WhitelistIP = dynamic(["0.0.0.0"]);
+let LookBack = 1h;
+
 let Clicks = UrlClickEvents
+    | where TimeGenerated >= ago(LookBack)
     | where Workload == "Email"
-    | where Url contains "sharepoint.com"
-    | where Timestamp >= ago(1d)
-    | project ClickTime = Timestamp, AccountUpn, Url, UrlChain, ClickIP = IPAddress;
-let SignIns = SigninLogs
-    | where TimeGenerated >= ago(1d)
-    | project SignInTime = TimeGenerated, UserPrincipalName, SignInIP = IPAddress, Timestamp = TimeGenerated, ReportId = Id;
+    | where Url has "sharepoint.com"
+    | project
+        ClickTime = TimeGenerated,
+        AccountUpn,
+        Url,
+        UrlChain,
+        ClickIP = IPAddress;
+let SignIns =
+    union isfuzzy=true
+        (
+        SigninLogs
+        | where TimeGenerated >= ago(LookBack)
+        | project
+            SignInTime = TimeGenerated,
+            UserPrincipalName,
+            SignInIP = tostring(IPAddress),
+            Timestamp = TimeGenerated,
+            ReportId = tostring(Id),
+            ResourceDisplayName,
+            IncomingTokenType,
+            IsInteractive,
+            SignInSource = "SigninLogs"
+        ),
+        (
+        AADNonInteractiveUserSignInLogs
+        | where TimeGenerated >= ago(LookBack)
+        | project
+            SignInTime = TimeGenerated,
+            UserPrincipalName,
+            SignInIP = tostring(IPAddress),
+            Timestamp = TimeGenerated,
+            ReportId = tostring(Id),
+            ResourceDisplayName,
+            IncomingTokenType,
+            IsInteractive,
+            SignInEventTypes,
+            SignInSource = "AADNonInteractiveUserSignInLogs"
+        )
+    | where isnotempty(SignInIP)
+    | where not(set_has_element(WhitelistIP, SignInIP));
+
 Clicks
 | join kind=inner SignIns on $left.AccountUpn == $right.UserPrincipalName
+| where isnotempty(ClickIP) and isnotempty(SignInIP)
+| where SignInTime > ClickTime
 | where ClickIP != SignInIP
+| extend DelayMinutes = datetime_diff("minute", SignInTime, ClickTime)
+| summarize arg_min(DelayMinutes, *) by AccountUpn, ClickTime, Url, ClickIP
+| project
+    Timestamp,
+    ReportId,
+    AccountUpn,
+    ClickTime,
+    SignInTime,
+    DelayMinutes,
+    ClickIP,
+    SignInIP,
+    SignInSource,
+    IsInteractive,
+    IncomingTokenType,
+    SignInEventTypes,
+    ResourceDisplayName,
+    Url,
+    UrlChain
