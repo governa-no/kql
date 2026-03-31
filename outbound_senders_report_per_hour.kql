@@ -1,3 +1,6 @@
+// Description: Identify outbound email senders with the highest single-hour sending volume over the last 60 days
+// Category: Email
+// Tags: OutboundEmail, VolumeAnalysis, SenderProfiling, AnomalyDetection
 EmailEvents
 | where TimeGenerated > ago(60d)
 | where EmailDirection == "Outbound"
