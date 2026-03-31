@@ -1,3 +1,6 @@
+// Description: Correlate SharePoint email link clicks with subsequent Azure AD sign-ins from a different IP address to detect possible phishing, token theft, or adversary-in-the-middle activity
+// Category: Identity
+// Tags: Phishing, AiTM, SuspiciousSignIn, UrlClickCorrelation, SharePoint, TokenTheft
 let WhitelistIP = dynamic(["0.0.0.0"]);
 let LookBack = 30m;
 let Clicks = UrlClickEvents
